@@ -1,0 +1,167 @@
+{
+  "name": "My workflow 3",
+  "nodes": [
+    {
+      "parameters": {
+        "httpMethod": "POST",
+        "path": "study-bot",
+        "responseMode": "responseNode",
+        "options": {}
+      },
+      "type": "n8n-nodes-base.webhook",
+      "typeVersion": 2.1,
+      "position": [
+        -736,
+        -128
+      ],
+      "id": "5c5d7381-70e3-488a-aa8c-06fd420d46e8",
+      "name": "Webhook",
+      "webhookId": "11843e01-cf88-43e1-8421-c02ffea6aa65"
+    },
+    {
+      "parameters": {
+        "options": {}
+      },
+      "type": "@n8n/n8n-nodes-langchain.lmChatGoogleGemini",
+      "typeVersion": 1,
+      "position": [
+        -608,
+        80
+      ],
+      "id": "0dc5e658-754f-4e6a-9258-553469ce6e73",
+      "name": "Google Gemini Chat Model",
+      "credentials": {
+        "googlePalmApi": {
+          "id": "wkBsV9t7tdDn4eXe",
+          "name": "Google Gemini(PaLM) Api account 4"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "promptType": "define",
+        "text": "=You are an AI study assistant for Sri Lankan A/L students.\n\nUse previous conversation context when answering follow-up questions.\n\nRules:\n- Explain clearly and simply\n- Break complex answers into steps\n- Keep answers short\n- If asked for quiz, give 3 MCQs with answers\n\nUser message:\nYou are an AI study assistant for Sri Lankan A/L students.\n\nAlways respond based on the user's latest message.\n\nUser message:\n{{ $json[\"body\"][\"message\"] }}\n\nInstructions:\n- Answer clearly and simply\n- Stay relevant to the user's question\n- Do NOT repeat greetings every time\n- Give direct educational answers\n- Give answers through srilankan A/L syllabus only\n- If user ask about make a study plan , your task is to create a personalized study plan for a student. follow the process below step by step.\n  1. Ask for the subject: first,ask the student which subject     they need help with. \n  2.Access the student's level: After identifying the subject,ask a 3 questions related to that subject to understand the student's current level.Based on their answers ,classify them into one of three categories.\n       a. Advanced (high proficiency)\n       b. intermediate(average level)\n       c. Beginner(needs foundational support)\n  3.consider other subjects: Take into account that the student has other subjects to study as well.Ensure the study plan balances time across subjects.\n  4.Create a study plan: Design a structured study plan for the subject in focus . include:\n                     -daily or weekly goals\n                     -Time allocation (considering other subjects)\n                     -speciffic topics or skills to cover\n                     -Study techniques suitable for the student's level(e.g.,practice prblems,concept review,flashcards,etc.)\n  5.Present visually: Use charts,diagrams, or tables to present the study plan clearly and attractively.for example\n            - A weekly timetable\n            - A progress tracking table\n            - A concept map or topic breakdown\n\nAll content ,topics and learning objectives must be aligned with the official A/l syllabus in sri lanka.\n\n",
+        "options": {}
+      },
+      "type": "@n8n/n8n-nodes-langchain.agent",
+      "typeVersion": 3.1,
+      "position": [
+        -512,
+        -128
+      ],
+      "id": "916cba5d-4281-42ba-8233-74f1f1adb645",
+      "name": "AI Agent"
+    },
+    {
+      "parameters": {
+        "jsCode": "const agentOutput = $input.first().json.output;\n\n// agentOutput empty නම් error වළකන්න\nif (!agentOutput) {\n  return [{ json: { reply: \"Sorry, I couldn't generate a response. Please try again.\", isHtml: false } }];\n}\n\nlet replyContent = agentOutput; // default — plain text\nlet isHtml = false;\n\n// JSON block එකක් තියෙනවාද check කරනවා\nconst jsonMatch = agentOutput.match(/\\{[\\s\\S]*\\}/);\n\nif (jsonMatch) {\n  try {\n    const data = JSON.parse(jsonMatch[0]);\n\n    if (data.type === \"study_plan\") {\n      isHtml = true;\n\n      let tableRows = '';\n      data.weekly_plan.forEach(day => {\n        day.sessions.forEach((session, i) => {\n          tableRows += `\n            <tr>\n              ${i === 0 ? `<td rowspan=\"${day.sessions.length}\" style=\"font-weight:bold;background:#f0f4ff;padding:8px;border:1px solid #ddd;\">${day.day}</td>` : ''}\n              <td style=\"padding:8px;border:1px solid #ddd;\">${session.time}</td>\n              <td style=\"padding:8px;border:1px solid #ddd;\">${session.subject}</td>\n              <td style=\"padding:8px;border:1px solid #ddd;\">${session.topic}</td>\n              <td style=\"padding:8px;border:1px solid #ddd;\">${session.technique}</td>\n            </tr>`;\n        });\n      });\n\n      let topicRows = data.topics.map(t => `\n        <tr>\n          <td style=\"padding:8px;border:1px solid #ddd;\">${t.topic}</td>\n          <td style=\"padding:8px;border:1px solid #ddd;\">${t.weeks} weeks</td>\n          <td style=\"padding:8px;border:1px solid #ddd;color:${t.priority==='High'?'red':t.priority==='Medium'?'orange':'green'}\">${t.priority}</td>\n        </tr>`).join('');\n\n      let tipsList = data.tips.map(t => `<li style=\"margin:4px 0;\">✅ ${t}</li>`).join('');\n\n      replyContent = `\n        <div style=\"font-family:sans-serif;\">\n          <h2 style=\"color:#4f46e5;\">📚 ${data.subject} Study Plan</h2>\n          <p>🎯 Level: <strong>${data.level}</strong></p>\n          <h3 style=\"color:#4f46e5;\">📅 Weekly Timetable</h3>\n          <table style=\"width:100%;border-collapse:collapse;margin-bottom:16px;\">\n            <thead>\n              <tr style=\"background:#4f46e5;color:white;\">\n                <th style=\"padding:8px;\">Day</th>\n                <th style=\"padding:8px;\">Time</th>\n                <th style=\"padding:8px;\">Subject</th>\n                <th style=\"padding:8px;\">Topic</th>\n                <th style=\"padding:8px;\">Technique</th>\n              </tr>\n            </thead>\n            <tbody>${tableRows}</tbody>\n          </table>\n          <h3 style=\"color:#4f46e5;\">📊 Topic Priority</h3>\n          <table style=\"width:100%;border-collapse:collapse;margin-bottom:16px;\">\n            <thead>\n              <tr style=\"background:#4f46e5;color:white;\">\n                <th style=\"padding:8px;\">Topic</th>\n                <th style=\"padding:8px;\">Duration</th>\n                <th style=\"padding:8px;\">Priority</th>\n              </tr>\n            </thead>\n            <tbody>${topicRows}</tbody>\n          </table>\n          <h3 style=\"color:#4f46e5;\">💡 Study Tips</h3>\n          <ul style=\"background:#f9f9ff;padding:16px;border-radius:8px;\">${tipsList}</ul>\n        </div>`;\n    }\n    // study_plan නෙමෙයි නම් replyContent = agentOutput (plain text)\n  } catch (e) {\n    // JSON parse fail — replyContent = agentOutput (plain text)\n  }\n}\n\n// ✅ සෑම විටම reply key එකෙන් return කරනවා\nreturn [{ json: { reply: replyContent, isHtml: isHtml } }];"
+      },
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        -160,
+        -128
+      ],
+      "id": "33cb8b24-e6ee-4db0-95b4-c722ca25cb1e",
+      "name": "Code in JavaScript"
+    },
+    {
+      "parameters": {
+        "options": {}
+      },
+      "type": "n8n-nodes-base.respondToWebhook",
+      "typeVersion": 1.5,
+      "position": [
+        48,
+        -128
+      ],
+      "id": "cc6a766e-8c74-497b-9b5c-c57ca61d539e",
+      "name": "Respond to Webhook"
+    },
+    {
+      "parameters": {
+        "sessionIdType": "customKey",
+        "sessionKey": "=study-bot-session",
+        "contextWindowLength": 10
+      },
+      "type": "@n8n/n8n-nodes-langchain.memoryBufferWindow",
+      "typeVersion": 1.3,
+      "position": [
+        -448,
+        192
+      ],
+      "id": "abd4e0f6-9ad7-416e-8dc2-eda68e06598d",
+      "name": "Simple Memory"
+    }
+  ],
+  "pinData": {},
+  "connections": {
+    "Webhook": {
+      "main": [
+        [
+          {
+            "node": "AI Agent",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Google Gemini Chat Model": {
+      "ai_languageModel": [
+        [
+          {
+            "node": "AI Agent",
+            "type": "ai_languageModel",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "AI Agent": {
+      "main": [
+        [
+          {
+            "node": "Code in JavaScript",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Code in JavaScript": {
+      "main": [
+        [
+          {
+            "node": "Respond to Webhook",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Simple Memory": {
+      "ai_memory": [
+        [
+          {
+            "node": "AI Agent",
+            "type": "ai_memory",
+            "index": 0
+          }
+        ]
+      ]
+    }
+  },
+  "active": true,
+  "settings": {
+    "executionOrder": "v1",
+    "binaryMode": "separate"
+  },
+  "versionId": "824cf8c0-40dc-40b4-8795-1de7f95c2f82",
+  "meta": {
+    "templateCredsSetupCompleted": true,
+    "instanceId": "4c673fb0be3b4627f612eeb9293423d066434afe816252094580ca41a0b8f77c"
+  },
+  "id": "RbHzTp6DVQc0Mfoi",
+  "tags": []
+}
